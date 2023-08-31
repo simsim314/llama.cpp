@@ -19,17 +19,18 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (params.model_draft.empty()) {
+        fprintf(stderr, "%s: error: --model-draft is required\n", __func__);
+        return 1;
+    }
+
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("speculative", "log"));
     LOG_TEE("Log start\n");
     log_dump_cmdline(argc, argv);
 #endif // LOG_DISABLE_LOGS
 
-    // TODO: tmp hardcoded
-    const std::string fname_draft = "../models/codellama-7b/ggml-model-q4_1.gguf";
-
-    // init LLM
-
+    // init llama.cpp
     llama_backend_init(params.numa);
 
     llama_model * model_tgt = NULL;
@@ -43,11 +44,10 @@ int main(int argc, char ** argv) {
     std::tie(model_tgt, ctx_tgt) = llama_init_from_gpt_params(params);
 
     // load the draft model
-    params.model = fname_draft;
+    params.model = params.model_draft;
     std::tie(model_dft, ctx_dft) = llama_init_from_gpt_params(params);
 
     // tokenize the prompt
-
     std::vector<llama_token> inp;
     inp = ::llama_tokenize(ctx_tgt, params.prompt, true);
 
@@ -77,7 +77,8 @@ int main(int argc, char ** argv) {
     const int n_vocab = llama_n_vocab(ctx_tgt);
     //GGML_ASSERT(n_vocab == llama_n_vocab(ctx_dft));
 
-    const int n_draft = 12;
+    // how many tokens to draft each time
+    const int n_draft = 8;
 
     int n_predict = 0;
     int n_drafted = 0;
@@ -237,8 +238,8 @@ int main(int argc, char ** argv) {
         for (int i = 0; i < n_draft; ++i) {
             float * logits = llama_get_logits(ctx_dft);
 
-            int   best_id    = -1;
-            float best_logit = -1e30f;
+            int   best_id     = -1;
+            float best_logit  = -1e30f;
             float best_logit2 = -1e30f;
             for (int j = 0; j < n_vocab; ++j) {
                 if (logits[j] > best_logit) {
@@ -275,7 +276,7 @@ int main(int argc, char ** argv) {
     LOG_TEE("generated %d tokens in %.3f seconds, speed: %.3f t/s\n", n_predict, (t_gen_end - t_gen_start) / 1e6f, n_predict / ((t_gen_end - t_gen_start) / 1e6f));
 
     // TODO: make sure these numbers are computed correctly
-    LOG_TEE("\n\n");
+    LOG_TEE("\n");
     LOG_TEE("n_draft   = %d\n", n_draft);
     LOG_TEE("n_predict = %d\n", n_predict);
     LOG_TEE("n_drafted = %d\n", n_drafted);

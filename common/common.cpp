@@ -315,6 +315,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-md" || arg == "--model-draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_draft = argv[i];
         } else if (arg == "-a" || arg == "--alias") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -667,6 +673,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
     fprintf(stdout, "  -m FNAME, --model FNAME\n");
     fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stdout, "  -md FNAME, --model-draft FNAME\n");
+    fprintf(stdout, "                        draft model for speculative sampling (default: %s)\n", params.model.c_str());
     fprintf(stdout, "  -ld LOGDIR, --logdir LOGDIR\n");
     fprintf(stdout, "                        path under which to save YAML logs (no logging if unset)\n");
     fprintf(stdout, "\n");
@@ -1060,6 +1068,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "mirostat_lr: %f # default: 0.1\n", params.mirostat_eta);
     fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
     fprintf(stream, "model: %s # default: models/7B/ggml-model.bin\n", params.model.c_str());
+    fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
     fprintf(stream, "mtest: %s # default: false\n", params.mem_test ? "true" : "false");
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
     fprintf(stream, "n_gpu_layers: %d # default: 0\n", params.n_gpu_layers);

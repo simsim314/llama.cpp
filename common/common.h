@@ -63,6 +63,7 @@ struct gpt_params {
     float       cfg_scale         = 1.f;   // How strong is guidance
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
+    std::string model_draft       = "";                              // draft model for speculative sampling
     std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
