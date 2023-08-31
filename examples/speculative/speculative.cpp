@@ -26,7 +26,7 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     // TODO: tmp hardcoded
-    const std::string fname_draft = "../models/codellama-7b/ggml-model-q4_0.gguf";
+    const std::string fname_draft = "../models/codellama-7b/ggml-model-q4_1.gguf";
 
     // init LLM
 
@@ -77,9 +77,11 @@ int main(int argc, char ** argv) {
     const int n_vocab = llama_n_vocab(ctx_tgt);
     //GGML_ASSERT(n_vocab == llama_n_vocab(ctx_dft));
 
-    const int n_draft = 8;
+    const int n_draft = 12;
 
     int n_predict = 0;
+    int n_drafted = 0;
+    int n_accept  = 0;
 
     int n_past_tgt = inp.size();
     int n_past_dft = inp.size();
@@ -95,6 +97,8 @@ int main(int argc, char ** argv) {
     }
 
     bool has_eos = false;
+
+    const auto t_gen_start = ggml_time_us();
 
     while (true) {
         n_past_dft -= drafted.size();
@@ -192,7 +196,7 @@ int main(int argc, char ** argv) {
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
 
-                LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_tgt, last_n_tokens));
+                //LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_tgt, last_n_tokens));
             }
 
             const std::string token_str = llama_token_to_piece(ctx_tgt, id);
@@ -203,9 +207,11 @@ int main(int argc, char ** argv) {
                 has_eos = true;
             }
 
+            ++n_predict;
+
             if (i_dft < (int) drafted.size() && id == drafted[i_dft]) {
                 LOG("drafted token %d accepted\n", id);
-                ++n_predict;
+                ++n_accept;
                 ++n_past_tgt;
                 ++n_past_dft;
                 ++i_dft;
@@ -233,14 +239,23 @@ int main(int argc, char ** argv) {
 
             int   best_id    = -1;
             float best_logit = -1e30f;
+            float best_logit2 = -1e30f;
             for (int j = 0; j < n_vocab; ++j) {
                 if (logits[j] > best_logit) {
-                    best_logit = logits[j];
-                    best_id    = j;
+                    best_logit2 = best_logit;
+                    best_logit  = logits[j];
+                    best_id     = j;
                 }
             }
 
+            // very low confidence in the best token
+            // TODO: better way to do this
+            if (best_logit - best_logit2 < 1.0f) {
+                break;
+            }
+
             drafted.push_back(best_id);
+            ++n_drafted;
 
             llama_eval(ctx_dft, &drafted.back(), 1, n_past_dft, params.n_threads);
             ++n_past_dft;
@@ -249,12 +264,28 @@ int main(int argc, char ** argv) {
         // evaluate the target model on the drafted tokens
         llama_eval(ctx_tgt, drafted.data(), drafted.size(), n_past_tgt, params.n_threads);
         ++n_past_tgt;
-        ++n_predict;
 
         drafted.erase(drafted.begin());
     }
 
+    auto t_gen_end = ggml_time_us();
+
+    LOG_TEE("\n\n");
+
+    LOG_TEE("generated %d tokens in %.3f seconds, speed: %.3f t/s\n", n_predict, (t_gen_end - t_gen_start) / 1e6f, n_predict / ((t_gen_end - t_gen_start) / 1e6f));
+
+    // TODO: make sure these numbers are computed correctly
+    LOG_TEE("\n\n");
+    LOG_TEE("n_draft   = %d\n", n_draft);
+    LOG_TEE("n_predict = %d\n", n_predict);
+    LOG_TEE("n_drafted = %d\n", n_drafted);
+    LOG_TEE("n_accept  = %d\n", n_accept);
+    LOG_TEE("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
+
+    LOG_TEE("\ndraft:\n");
     llama_print_timings(ctx_dft);
+
+    LOG_TEE("\ntarget:\n");
     llama_print_timings(ctx_tgt);
 
     llama_free(ctx_tgt);
