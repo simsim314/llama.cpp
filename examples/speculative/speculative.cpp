@@ -78,7 +78,7 @@ int main(int argc, char ** argv) {
     //GGML_ASSERT(n_vocab == llama_n_vocab(ctx_dft));
 
     // how many tokens to draft each time
-    const int n_draft = 8;
+    const int n_draft = 16;
 
     int n_predict = 0;
     int n_drafted = 0;
